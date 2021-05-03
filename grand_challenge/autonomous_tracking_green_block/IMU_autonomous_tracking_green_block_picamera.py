@@ -6,6 +6,8 @@ import time
 import RPi.GPIO as gpio
 import serial
 import datetime
+from picamera.array import PiRGBArray
+from picamera import PiCamera
 
 import math
 
@@ -298,7 +300,7 @@ def left(left_angle):
     # dist = float(input())
     # angle = float(input()) 
     angle = left_angle 
-    current_angle_threshold_range = 2 #degrees
+    current_angle_threshold_range = 1 #degrees
     
     # angular_distance = 0.0012654*angle*1.42
     # number_of_ticks = int(98*angular_distance)
@@ -308,7 +310,7 @@ def left(left_angle):
     buttonBR = int(0)
     buttonFL = int(0)
 
-    time.sleep(0.1)
+    # time.sleep(0.1)
 
     global count
     count =0
@@ -341,7 +343,12 @@ def left(left_angle):
                 start_angle = float(line)
                 print("start_angle is: ", start_angle)
                 # current_angle = line
-                target_angle = (float(line) - angle)%360
+                # target_angle = (float(line) - angle)%360
+                target_angle = (float(line) - angle)
+
+                # if target_angle>270:
+                #     target_angle = target_angle-360
+
                 print("target_angle is: ", target_angle)
                 break
 
@@ -366,6 +373,9 @@ def left(left_angle):
                 #strip serial stream of extra characters
                 line = line.rstrip().lstrip()
                 # print(line)
+
+
+                
 
                 line = str(line)
                 line = line.strip("'")
@@ -423,7 +433,7 @@ def right(right_angle):
     buttonBR = int(0)
     buttonFL = int(0)
 
-    time.sleep(0.1)
+    # time.sleep(0.1)
 
     global count
     count =0
@@ -456,8 +466,15 @@ def right(right_angle):
                 start_angle = float(line)
                 print("start_angle is: ", start_angle)
                 # current_angle = line
+                # target_angle = (float(line) + angle)%360
                 target_angle = (float(line) + angle)%360
+
+
                 print("target_angle is: ", target_angle)
+
+                # if target_angle>270:
+                #     target_angle = target_angle-360
+
                 break
 
                 # print(line,"\n")
@@ -589,12 +606,24 @@ def nothing(x):
 
 # image_center = (320,240)
 
+#using picamera
+camera = PiCamera()
+camera.resolution = (640, 480)
+camera.framerate = 25
+rawCapture = PiRGBArray(camera, size=(640,480))
+time.sleep(0.1)
 
 
-cam= cv2.VideoCapture(0)
-fps = cam.get(cv2.CAP_PROP_FPS)
-timestamps = [cam.get(cv2.CAP_PROP_POS_MSEC)]
-calc_timestamps = [0.0]
+# create the object using video writer using xvid codec
+fourcc = cv2.VideoWriter_fourcc(*'XVID')
+out = cv2.VideoWriter('trackblockandretrive.avi', fourcc, 10, (640, 480))
+
+
+#using video capture, ran into hanging issues
+# cam= cv2.VideoCapture(0)
+# fps = cam.get(cv2.CAP_PROP_FPS)
+# timestamps = [cam.get(cv2.CAP_PROP_POS_MSEC)]
+# calc_timestamps = [0.0]
 
 #text parameters
 font = cv2.FONT_HERSHEY_SIMPLEX 
@@ -605,205 +634,178 @@ direction_scale = 1
 direction_thickness = 2
 
 #videowrite
-fourcc = cv2.VideoWriter_fourcc(*'XVID')
-out = cv2.VideoWriter('green_light_detection_video.avi', fourcc, 5.0, (640,480))
-timeElapsedlist = []
+# fourcc = cv2.VideoWriter_fourcc(*'XVID')
+# out = cv2.VideoWriter('green_light_detection_video.avi', fourcc, 5.0, (640,480))
+# timeElapsedlist = []
 
 open_servo()
 
 
-# while True:
-#     ret, image=cam.read()
-#     # image = imutils.resize(image, width = 640)
-#     # print(image.shape)
-#     image = cv2.flip(image,-1)
-#     startTime = time.time()
-#     # gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-#     # blurred = cv2.GaussianBlur(gray, (5, 5), 0)
-#     # thresh = cv2.threshold(blurred, 60, 255, cv2.THRESH_BINARY)[1]
-#     # frame = cv2.flip(thresh,1)
+for frame in camera.capture_continuous(rawCapture, format="bgr", use_video_port=False):
+    image = frame.array
+    image = cv2.rotate(image, cv2.ROTATE_180)
+
+
+    startTime = time.time()
+    
    
-#     hsv_img = cv2.cvtColor(image,cv2.COLOR_BGR2HSV)
+    hsv_img = cv2.cvtColor(image,cv2.COLOR_BGR2HSV)
 
-#     blurred = cv2.GaussianBlur(hsv_img, (5, 5), 0)
-# #     # create the Mask
-# #     lower_range = np.array([l_h,l_s,l_v])
-# #     upper_range = np.array([u_h,u_s,u_v])
-#     lower_range = np.array([41,105,20])
-#     upper_range = np.array([83,255,224])
+    blurred = cv2.GaussianBlur(hsv_img, (5, 5), 0)
+  
+    lower_range = np.array([41,105,20])
+    upper_range = np.array([83,255,224])
 
-#     # use threshold
-#     mask = cv2.inRange(blurred, lower_range, upper_range)
-#     # image_edges = cv2.Canny(mask,85,255)
+    # use threshold
+    mask = cv2.inRange(blurred, lower_range, upper_range)
+    # image_edges = cv2.Canny(mask,85,255)
 
-#     #using contours
-#     cnts = cv2.findContours(mask.copy(), cv2.RETR_EXTERNAL,cv2.CHAIN_APPROX_SIMPLE)
-#     cnts = imutils.grab_contours(cnts)
+    #using contours
+    cnts = cv2.findContours(mask.copy(), cv2.RETR_EXTERNAL,cv2.CHAIN_APPROX_SIMPLE)
+    cnts = imutils.grab_contours(cnts)
 
-#     if len(cnts) == 0:
-#         print("No contours found. No object detected!")
-#     #go through all contours
+    if len(cnts) == 0:
+        print("No contours found. No object detected!")
+      
 
-#     # for c in cnts:
-
-#     #     #find centre of the contour
-#     #     M = cv2.moments(c)
-#     #     if M["m00"] != 0:
-#     #         cX = int(M["m10"] / M["m00"])
-#     #         cY = int(M["m01"] / M["m00"])
-#     #     else:
-#     #         cX, cY = 0, 0
-
-#     #     # centre_x= int((min(cX)+max(cX))/2)
-#     #     # centre_y = int((min(cY)+max(cY))/2)
-#     #     centre_x= cX
-#     #     centre_y= cY
-#     #     # dist_2 = calc_dist((centre_x,centre_y))
-
-
-#     #     contour_points = cnts[0]
-#     #     (x,y),radius = cv2.minEnclosingCircle(contour_points)
-#     #     center = (int(x),int(y))
-#     #     radius = int(radius)
-#     #     # cv2.circle(image, (cX, cY), 15, (0,0,255), 8)  
-#     #     cv2.circle(image, (cX, cY), radius, (0,0,255), 3) 
-#     #     cv2.circle(image,(cX, cY),2,(0,0,0),3)
-#     #     global block_pixel_location = [cX,cY]
-        
-#     #     #draw crosshair
-#     #     cv2.line(image,(320,120),(320,360),(0,0,0),2)
-#     #     cv2.line(image,(200,240),(440,240),(0,0,0),2)
-#     #     cv2.putText(image,str(block_pixel_location),(20,35),cv2.FONT_HERSHEY_DUPLEX,direction_scale,(0,0,255), direction_thickness)
-
-#     #     global pixel_to_rotate = 320-block_pixel_location[0]
-#     #     print("pixel_to_rotate",pixel_to_rotate)
-#     #     global degree_to_rotate = 0.061*pixel_to_rotate
-#     #     print("degree_to_rotate",degree_to_rotate)
-
-
-#     #     global distance_of_block_in_pixels = 240 - block_pixel_location[1]
-#     #     print("distance_of_block_in_pixels: ",distance_of_block_in_pixels)
-
-
-#     #     global pixel_center_range = 50
-#     #     global angle_to_rotate = 5
-
-    
-
-#     #find centre of the contour
-#     biggest_contour = max(cnts, key=cv2.contourArea)
+    #find centre of the contour
+    biggest_contour = max(cnts, key=cv2.contourArea)
    
-#     (cX,cY),radius = cv2.minEnclosingCircle(biggest_contour)
-#     center = (int(cX),int(cY))
-#     radius = int(radius)
-#     print("center is: ",center,"radius is: ",radius)
+    (object_X,object_Y),radius = cv2.minEnclosingCircle(biggest_contour)
+    center = (int(object_X),int(object_Y))
+    radius = int(radius)
+    print("center is: ",center,"radius is: ",radius)
 
     
-#     # cv2.circle(image, (cX, cY), 15, (0,0,255), 8)  
-#     cv2.circle(image, (center[0], center[1]), radius, (0,0,255), 3) 
-#     cv2.circle(image,(center[0], center[1]),2,(0,0,0),3)
-#     global block_pixel_location 
-#     block_pixel_location = center
+    # cv2.circle(image, (object_X, object_Y), 15, (0,0,255), 8)  
+    cv2.circle(image, (center[0], center[1]), radius, (0,0,255), 3) 
+    cv2.circle(image,(center[0], center[1]),2,(0,0,0),3)
     
-#     #draw crosshair centered at 320,240
-#     cv2.line(image,(320,120),(320,360),(0,0,0),2)
-#     cv2.line(image,(200,240),(440,240),(0,0,0),2)
-#     location_text = "Block_locn: " + str(block_pixel_location) 
-#     cv2.putText(image,location_text,(20,35),cv2.FONT_HERSHEY_DUPLEX,direction_scale,(0,0,255), direction_thickness)
+    global block_pixel_location 
+    block_pixel_location = center
+    
+    image_center_X = 320
+    image_center_Y = 240
 
-#     radius_text = "Contour_Radius: " + str(radius) 
-#     cv2.putText(image,radius_text,(20,75),cv2.FONT_HERSHEY_DUPLEX,direction_scale,(0,0,255), direction_thickness)
-#     cv2.imshow("cam",image)
-#     # time.sleep(2)
+    #draw crosshair centered at 320,240
+    cv2.line(image,(320,120),(320,360),(0,0,0),2)
+    cv2.line(image,(200,240),(440,240),(0,0,0),2)
+    location_text = "Block_locn: " + str(block_pixel_location) 
+    cv2.putText(image,location_text,(20,35),cv2.FONT_HERSHEY_DUPLEX,direction_scale,(0,0,255), direction_thickness)
 
+    radius_text = "Contour_Radius: " + str(radius) 
+    cv2.putText(image,radius_text,(20,75),cv2.FONT_HERSHEY_DUPLEX,direction_scale,(0,0,255), direction_thickness)
+    cv2.imshow("cam",image)
 
-
-#     global pixel_to_rotate 
-#     pixel_to_rotate = 320-block_pixel_location[0]
-#     print("pixel_to_rotate",pixel_to_rotate)
-
-
-#     global degree_to_rotate
-#     degree_to_rotate = int(0.061*pixel_to_rotate)
-#     print("degree_to_rotate",degree_to_rotate)
-
-
-#     global distance_of_block_in_pixels
-#     distance_of_block_in_pixels = 240 - block_pixel_location[1]
-#     print("distance_of_block_in_pixels: ",distance_of_block_in_pixels,"\n")
-
-#     # set range of pixels for the block
-#     global pixel_center_range
-#     pixel_center_range = 50
-
-#     global angle_to_rotate 
-#     angle_to_rotate = 5
+    # time.sleep(2)
 
 
 
+    global pixel_to_rotate 
+    pixel_to_rotate = image_center_X - object_X
+    print("pixel_to_rotate",pixel_to_rotate)
+
+
+    global degree_to_rotate
+    degree_to_rotate = int(0.061*pixel_to_rotate)
+    print("degree_to_rotate",degree_to_rotate)
+
+
+    global distance_of_block_in_pixels
+    distance_of_block_in_pixels = image_center_Y - object_Y
+    print("distance_of_block_in_pixels: ",distance_of_block_in_pixels,"\n")
+
+    # set range of pixels for the block
+    global object_center_pixel_threshold
+    object_center_pixel_threshold = 50
+
+    global angle_to_rotate 
+    angle_to_rotate = degree_to_rotate
 
 
 
 
 
 
-#     if (radius<190):
-#         if(pixel_to_rotate<-pixel_center_range):
-#             right(angle_to_rotate)
-#             time.sleep(0.2)
+
+
+
+    if (radius<190):
+        # if(pixel_to_rotate<-object_center_pixel_threshold):
+        #     right(angle_to_rotate)
+        #     time.sleep(0.1)
             
-#         elif(pixel_to_rotate>pixel_center_range):
-#             left(angle_to_rotate)
-#             time.sleep(0.2)
+        # elif(pixel_to_rotate>object_center_pixel_threshold):
+        #     left(angle_to_rotate)
+        #     time.sleep(0.1)
             
-#         elif(-pixel_center_range<=pixel_to_rotate<=pixel_center_range):
-#             forward(0.05)
-#             open_servo()
-#             time.sleep(0.2)
+        # elif(-object_center_pixel_threshold<=pixel_to_rotate<=object_center_pixel_threshold):
+        #     forward(0.05)
+        #     open_servo()
+        #     time.sleep(0.1)
 
-#     elif (radius>=190):
-#         open_servo()
-#         forward(0.1)
-#         close_servo()
-#         time.sleep(0.5)
-#         # reverse(0.4)
-#         # left(90)
-#         # forward(0.2)
-#         # command = 'raspistill -w 1280 -h 720 -vf -hf -o green_block_kulbir' + '.jpg'
-#         # command = "raspistill -o green_block_kulbir.jpg"
-#         # os.system(command)
-#         # time.sleep(4)
+        if(object_X<(image_center_X - object_center_pixel_threshold)):
+            left(abs(angle_to_rotate))
+            time.sleep(0.1)
+            
+        elif(object_X>(image_center_X + object_center_pixel_threshold)):
+            right(abs(angle_to_rotate))
+            time.sleep(0.1)
+            
+        elif (((image_center_X - object_center_pixel_threshold)<=object_X) and (object_X<=(image_center_X + object_center_pixel_threshold))):
+            forward(0.05)
+            open_servo()
 
-#         # sendEmail('green_block_kulbir')
-#         break
-
-#     # cv2.imshow("cam",image)
-#     out.write(image)
-#     # timeElapsed = time.time() - startTime 
-#     # timeElapsedlist.append(timeElapsed)
-
-#     # open .txt file to save data
-#     # f = open('time_elapsed_data.txt','a')
-#     # print time to run through loop to the screen & save to file
-#     # f.write(str(timeElapsed))
+            time.sleep(0.1)
 
 
 
-#     # f.write('\n')
-#     # print('time elapsed for frame', timeElapsed)
+    elif (radius>=190):
+        open_servo()
+        forward(0.1)
+        close_servo()
+        time.sleep(0.5)
+        # reverse(0.4)
+        # left(90)
+        # forward(0.2)
+        # command = 'raspistill -w 1280 -h 720 -vf -hf -o green_block_kulbir' + '.jpg'
+        # command = "raspistill -o green_block_kulbir.jpg"object_Y
+        # sendEmail('green_block_kulbir')
+        break
 
-#     k = cv2.waitKey(50) & 0xFF
-#     if k == 27: 
-#         break
+    
+    # cv2.imshow("cam",image)
+
+    out.write(image)
 
 
-# # f.close()
-# cam.release()
+    # cv2.imshow("cam",image)
+    # out.write(image)
+    # timeElapsed = time.time() - startTime 
+    # timeElapsedlist.append(timeElapsed)
+
+    # open .txt file to save data
+    # f = open('time_elapsed_data.txt','a')
+    # print time to run through loop to the screen & save to file
+    # f.write(str(timeElapsed))
+
+
+
+    # f.write('\n')
+    # print('time elapsed for frame', timeElapsed)
+
+    k = cv2.waitKey(50) & 0xFF
+    if k == 27: 
+        break
+
+
+# f.close()
+cam.release()
 # out.release()
-# cv2.destroyAllWindows() 
+cv2.destroyAllWindows() 
 
-# left(180)
-right(90)
+# left(45)
+# right(45)
 
 file = open('path_list.txt','w')
 
